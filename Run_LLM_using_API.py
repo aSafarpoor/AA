@@ -13,12 +13,16 @@ from tqdm import tqdm
 
 from HRG_Graph import Main_Runner as Main_Runner_HRG
 from SBM_Graph import Main_Runner as Main_Runner_SBM
+from SmallSBM_Graph import Main_Runner as Main_Runner_SmallSBM
+
+
 from AA import select_node_AA
 from LLM_Utils import (
     build_small_directed_graph,
     build_My_FB,
     load_graph,
-    variance_computer
+    variance_computer,
+    build_My_RedditTwitter
 )
 from Prompts import Prompt_General
 
@@ -72,8 +76,16 @@ class Simulation:
                 self.graph = Main_Runner_SBM(
                     save_graph_flag, graph_path=graph_path, random_seed=random_seed
                 )
+            elif graph_type == "smallsbm":
+                self.graph = Main_Runner_SmallSBM(
+                    save_graph_flag, graph_path=graph_path, random_seed=random_seed
+                )
             elif graph_type == "FB":
                 self.graph = build_My_FB(save_graph_flag, graph_path, random_seed)
+            elif graph_type.lower() in ['reddit','twitter']:
+                self.graph = build_My_RedditTwitter(
+                    save_graph_flag, graph_path=graph_path, random_seed=random_seed, graph_type = graph_type
+                )
             else:
                 raise ValueError("graph_type must be 'small' or 'hrg'")
 
@@ -191,7 +203,7 @@ class Simulation:
             self.post_history.append((active_node, post))
 
             neighbors = list(self.graph.neighbors(active_node))
-            if self.AA_level == 'strong':
+            if self.AA_level in ['strong','grid'] :
                 successors= [node for node in neighbors if node not in self.AA_nodes]
             else:
                 successors= [node for node in neighbors]
@@ -272,7 +284,7 @@ def main(
     AA_level,
     load_graph=True,
     save_graph_flag=False,
-    graph_path="hrg_graph.pkl",
+    graph_path="some_graph.pkl",
     max_workers=2,
     out_dir="results",
     random_seed=0,

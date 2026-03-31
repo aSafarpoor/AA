@@ -339,7 +339,9 @@ def build_My_FB(save_graph_flag, graph_path,random_seed, draw_flag = False, stub
 
     return G
 
-
+# ================================================================
+# Top k cev=ntrality functions
+# ================================================================
 
 def top_k_degree_nodes(G: nx.Graph, k: int):
 
@@ -364,3 +366,38 @@ def top_k_betweenness_nodes(G: nx.Graph, k: int, normalized: bool = True):
     sorted_nodes = sorted(bet, key=bet.get, reverse=True)
 
     return sorted_nodes[:k]
+
+
+# ================================================================
+# Read build_My_RedditTwitter subgraph and assign opinions
+# ================================================================
+def build_My_RedditTwitter(save_graph_flag, graph_path,random_seed, graph_type, draw_flag = False, stubborn_mu=0.65, stubborn_sigma=0.20, activeness_alpha=0.4, activeness_beta=3.0):  
+
+    if random_seed > 9:
+        raise ValueError(f"random seed is {random_seed} should be less than 10")
+    
+    with open(f'RedditTwitter/{graph_type.lower()}_{random_seed}_nx_Graph.pkl', "rb") as f:
+        G = pickle.load(f)
+     
+    n = len(G.nodes)
+
+    stubbornness = np.random.normal(stubborn_mu, stubborn_sigma, n)
+    stubbornness = np.clip(stubbornness, 0.0, 1.0)
+    activeness = np.random.beta(activeness_alpha, activeness_beta, n) # activeness_alpha=0.6, activeness_beta=3.0
+
+    for i, node in enumerate(G.nodes()):
+        G.nodes[node]["stubbornness"] = float(stubbornness[i])
+        G.nodes[node]["activeness"] = float(activeness[i])
+
+
+    compute_graph_statistics(G)
+
+    if draw_flag:
+        pos = minimal_graph_shower(G, return_pos=True)
+
+    if save_graph_flag:
+        save_graph(G, graph_path)
+
+    return G
+
+

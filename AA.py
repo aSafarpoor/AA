@@ -37,7 +37,7 @@ def select_adversarial_nodes(graph, k, change_value=1.0, bias_if_odd='pos'):
 
     # Budget per side (balanced)
     k_pos = k // 2
-    k_neg = k - k_pos
+    k_neg = k // 2
     if k % 2 != 0:
         if bias_if_odd == 'pos':
             k_pos += 1
@@ -123,41 +123,71 @@ def select_adversarial_nodes(graph, k, change_value=1.0, bias_if_odd='pos'):
 def select_node_AA(graph, AA_level, AA_type, AA_k, random_seed=42):
 
     random.seed(random_seed)
+    if 'grid' in AA_level:
+        delta = float(AA_level.split('_')[1])
+        AAs = select_adversarial_nodes(graph, AA_k)
+        for node in AAs:
+            o_node = graph.nodes[node]["opinion"]
+            if o_node > 0:
+                graph.nodes[node]["opinion"] = 1 #min(1.0, o_node + change_value)
+            elif o_node < 0:
+                graph.nodes[node]["opinion"] = -1 # max(-1.0, o_node - change_value)
+            else:  # neutral – assign random extreme scaled by change_value
+                graph.nodes[node]["opinion"] = random.choice([-1.0, 1.0]) # * change_value
 
-    if AA_level == "weak":
-        change_value = 0.5
-    elif AA_level == "strong":
-        change_value = 1.0
-    else:
-        raise ValueError("Not Defined")
-
-    if AA_type == "None":
-        AAs = []
-    elif AA_type == "random":
-        AAs = random.sample(list(graph.nodes()), min(AA_k, graph.number_of_nodes()))
-    elif AA_type == "betweenness":
-        AAs = top_k_betweenness_nodes(graph, AA_k)
-    elif AA_type == "degree":
-        AAs = top_k_degree_nodes(graph, AA_k)
-    elif AA_type == "greedy":
-        AAs = select_adversarial_nodes(graph, AA_k, change_value)
-    else:
-        raise ValueError(f"Unknown AA_type: {AA_type}")
-
-    for node in AAs:
-        o_node = graph.nodes[node]["opinion"]
-        if o_node > 0:
-            graph.nodes[node]["opinion"] = min(1.0, o_node + change_value)
-        elif o_node < 0:
-            graph.nodes[node]["opinion"] = max(-1.0, o_node - change_value)
-        else:  # neutral – assign random extreme scaled by change_value
-            graph.nodes[node]["opinion"] = random.choice([-1.0, 1.0]) * change_value
-
-        graph.nodes[node]["activeness"] = min(1.0, graph.nodes[node]["activeness"] + change_value)
-
-        if AA_level == "strong":
+            graph.nodes[node]["activeness"] = delta
             graph.nodes[node]["stubbornness"] = 1.0
+
+    elif 'grid2' in AA_level:
+        delta1 = float(AA_level.split('_')[1])
+        delta2 = float(AA_level.split('_')[2])
+        AAs = select_adversarial_nodes(graph, AA_k)
+        for node in AAs:
+            o_node = graph.nodes[node]["opinion"]
+            if o_node > 0:
+                graph.nodes[node]["opinion"] = 1 #min(1.0, o_node + change_value)
+            elif o_node < 0:
+                graph.nodes[node]["opinion"] = -1 # max(-1.0, o_node - change_value)
+            else:  # neutral – assign random extreme scaled by change_value
+                graph.nodes[node]["opinion"] = random.choice([-1.0, 1.0]) # * change_value
+
+            graph.nodes[node]["activeness"] = delta1
+            graph.nodes[node]["stubbornness"] = delta2
+            
+    else:
+
+        if AA_level == "nope":
+            change_value = 0.1
+        elif AA_level == "weak":
+            change_value = 0.5
+        else:  # "strong"
+            change_value = 1.0
+
+        if AA_type == "None":
+            AAs = []
+        elif AA_type == "random":
+            AAs = random.sample(list(graph.nodes()), min(AA_k, graph.number_of_nodes()))
+        elif AA_type == "betweenness":
+            AAs = top_k_betweenness_nodes(graph, AA_k)
+        elif AA_type == "degree":
+            AAs = top_k_degree_nodes(graph, AA_k)
+        elif AA_type == "greedy":
+            AAs = select_adversarial_nodes(graph, AA_k, change_value)
         else:
-            graph.nodes[node]["stubbornness"] = min(1.0, graph.nodes[node]["stubbornness"] + change_value)
+            raise ValueError(f"Unknown AA_type: {AA_type}")
+
+        for node in AAs:
+            o_node = graph.nodes[node]["opinion"]
+            if o_node > 0:
+                graph.nodes[node]["opinion"] = 1 #min(1.0, o_node + change_value)
+            elif o_node < 0:
+                graph.nodes[node]["opinion"] = -1 # max(-1.0, o_node - change_value)
+            else:  # neutral – assign random extreme scaled by change_value
+                graph.nodes[node]["opinion"] = random.choice([-1.0, 1.0]) # * change_value
+
+            graph.nodes[node]["activeness"] = min(1.0, graph.nodes[node]["activeness"] + change_value)
+
+            # if AA_level == "strong":
+            graph.nodes[node]["stubbornness"] = 1.0
 
     return graph, AAs[:]
