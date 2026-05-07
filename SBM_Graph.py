@@ -29,21 +29,28 @@ def generate_sbm(
     sizes = [community_size] * n_communities
     n = n_communities * community_size
 
-
-    probs = [[p_out for _ in range(n_communities)]
-             for _ in range(n_communities)]
+    probs = [
+        [p_out for _ in range(n_communities)]
+        for _ in range(n_communities)
+    ]
     for i in range(n_communities):
         probs[i][i] = p_in
 
-    G = nx.stochastic_block_model(sizes, probs, seed=seed)
-    G = nx.Graph(G)  
-    
+    G0 = nx.stochastic_block_model(sizes, probs, seed=seed)
+    edges = list(G0.edges())
+
+    G = nx.DiGraph()
+    G.add_nodes_from(G0.nodes())
+    G.add_edges_from(edges)
+    G.add_edges_from([(v, u) for u, v in edges])
+
     stubbornness = np.random.normal(stubborn_mu, stubborn_sigma, n)
     stubbornness = np.clip(stubbornness, 0.0, 1.0)
 
     activeness = np.random.beta(activeness_alpha, activeness_beta, n)
 
-    for i, node in enumerate(G.nodes()):
+    nodes = list(G.nodes())
+    for i, node in enumerate(nodes):
         G.nodes[node]["stubbornness"] = float(stubbornness[i])
         G.nodes[node]["activeness"] = float(activeness[i])
 
@@ -52,7 +59,8 @@ def generate_sbm(
 
 def force_connected(G, seed=42):
     random.seed(seed)
-    components = list(nx.connected_components(G))
+
+    components = list(nx.weakly_connected_components(G))
     if len(components) <= 1:
         return G
 
@@ -61,6 +69,7 @@ def force_connected(G, seed=42):
         u = random.choice(components[i])
         v = random.choice(components[i + 1])
         G.add_edge(u, v)
+        G.add_edge(v, u)
 
     return G
 
@@ -72,13 +81,13 @@ def Main_Runner(
     random_seed=42,
 ):
     G = generate_sbm(seed=random_seed)
-
     G = force_connected(G, seed=random_seed)
 
     opinions = assign_community_opinions(G, seed=random_seed)
 
-    for n in G.nodes():
-        G.nodes[n]["opinion"] = opinions[n]
+    nodes = list(G.nodes())
+    for node in nodes:
+        G.nodes[node]["opinion"] = opinions[node]
 
     normalize_opinions(G)
     compute_graph_statistics(G)
