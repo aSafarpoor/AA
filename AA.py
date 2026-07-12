@@ -287,6 +287,9 @@ def select_node_AA(
                 1.0,
                 graph.nodes[node]["activeness"] + change_value,
             )
-            graph.nodes[node]["stubbornness"] = 1.0
+            graph.nodes[node]["stubbornness"] = min(
+                1.0,
+                graph.nodes[node]["stubbornness"] + change_value,
+            )
 
     return graph, AAs[:]

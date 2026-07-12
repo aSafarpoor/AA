@@ -10,9 +10,8 @@ import networkx as nx
 import numpy as np
 import requests
 from tqdm import tqdm
-# HRG_Graph depends on `networkit`, which is only needed for synthetic HRG
-# graphs. Import lazily so the rest of the framework (Reddit/Twitter/SBM/etc.)
-# works even in environments without networkit installed.
+# HRG_Graph is imported inside __init__ (only needed for the 'hrg' graph type,
+# which requires the optional networkit dependency).
 from SBM_Graph import Main_Runner as Main_Runner_SBM
 from SmallSBM_Graph import Main_Runner as Main_Runner_SmallSBM
 from AA import select_node_AA
@@ -134,8 +133,6 @@ class Simulation:
             self.graph = boost_activeness(self.graph, self.delta_a)
         volunteers = volunteers_selection(list(set(self.graph.nodes) - set(self.AA_nodes)), ratio_of_volunteers=0.2, random_seed=random_seed)
         if CA_type in ['moderator', 'contrarian']:
-            # Reactive mitigation: select the moderator set M from the pool.
-            # CA_param = selection strategy, CA_type = neutral/contrarian behaviour.
             self.graph, self.CA_nodes = select_node_CA(
                 self.graph, volunteers, CA_param, CA_type, int(CA_k),
                 random_seed=random_seed,
@@ -206,11 +203,9 @@ class Simulation:
     def compute_contrarian_opinion(self, node):
         """Contrarian moderator opinion (paper Sec. 5.1):
 
-            o_v^t = -sign( sum_{u in Gamma_v^+} o_u^{t-1} ),  and 0 if the sum is 0.
+            o_v = -sign( sum_{u in Gamma_v^+} o_u ),   0 if the sum is 0.
 
-        The moderator reacts in the opposite direction to the dominant opinion
-        of its outgoing neighbourhood, using their opinions from the previous
-        step (i.e. the current stored values before this step's update).
+        Opposes the dominant opinion of the outgoing neighbourhood.
         """
         successors = list(self.graph.successors(node))
         if len(successors) == 0:
@@ -236,12 +231,9 @@ class Simulation:
         for iteration in tqdm(range(iterations), desc=f'Simulating {topic}'):
             active_node = np.random.choice(nodes, p=probs)
             if active_node in self.CA_nodes and self.CA_type == 'moderator':
-                # Neutral moderator: always generates neutral (opinion 0) content.
                 self.graph.nodes[active_node]['opinion'] = 0
                 post = self.generate_post(0, topic)
             elif active_node in self.CA_nodes and self.CA_type == 'contrarian':
-                # Contrarian moderator: opinion = opposite of dominant local opinion,
-                # recomputed each step from neighbours' current (previous-step) opinions.
                 contrarian_value = self.compute_contrarian_opinion(active_node)
                 self.graph.nodes[active_node]['opinion'] = contrarian_value
                 post = self.generate_post(contrarian_value, topic)

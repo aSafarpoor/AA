@@ -166,7 +166,6 @@ def build_My_FB(
             f"random seed is {random_seed} should be less than 10"
         )
 
-    # Seed so that stubbornness/activeness draws below are reproducible.
     np.random.seed(random_seed)
 
     with open(f"FB_Edges/FB_{random_seed}_edges.pkl", "rb") as f:
@@ -288,7 +287,6 @@ def build_My_RedditTwitter(
             f"random seed is {random_seed} should be less than 10"
         )
 
-    # Seed so that stubbornness/activeness draws below are reproducible.
     np.random.seed(random_seed)
 
     with open(
