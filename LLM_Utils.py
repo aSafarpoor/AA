@@ -156,7 +156,6 @@ def build_My_FB(
     save_graph_flag,
     graph_path,
     random_seed,
-    draw_flag=False,
     stubborn_mu=0.65,
     stubborn_sigma=0.20,
     activeness_alpha=0.6,
@@ -166,6 +165,9 @@ def build_My_FB(
         raise ValueError(
             f"random seed is {random_seed} should be less than 10"
         )
+
+    # Seed so that stubbornness/activeness draws below are reproducible.
+    np.random.seed(random_seed)
 
     with open(f"FB_Edges/FB_{random_seed}_edges.pkl", "rb") as f:
         edges = pickle.load(f)
@@ -276,7 +278,6 @@ def build_My_RedditTwitter(
     graph_path,
     random_seed,
     graph_type,
-    draw_flag=False,
     stubborn_mu=0.65,
     stubborn_sigma=0.20,
     activeness_alpha=0.4,
@@ -286,6 +287,9 @@ def build_My_RedditTwitter(
         raise ValueError(
             f"random seed is {random_seed} should be less than 10"
         )
+
+    # Seed so that stubbornness/activeness draws below are reproducible.
+    np.random.seed(random_seed)
 
     with open(
         f"RedditTwitter/{graph_type.lower()}_{random_seed}_nx_Graph.pkl",

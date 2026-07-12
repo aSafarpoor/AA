@@ -10,7 +10,9 @@ import networkx as nx
 import numpy as np
 import requests
 from tqdm import tqdm
-from HRG_Graph import Main_Runner as Main_Runner_HRG
+# HRG_Graph depends on `networkit`, which is only needed for synthetic HRG
+# graphs. Import lazily so the rest of the framework (Reddit/Twitter/SBM/etc.)
+# works even in environments without networkit installed.
 from SBM_Graph import Main_Runner as Main_Runner_SBM
 from SmallSBM_Graph import Main_Runner as Main_Runner_SmallSBM
 from AA import select_node_AA
@@ -49,7 +51,6 @@ def boost_activeness(G: nx.DiGraph, delta_a: float):
 
 
 class Simulation:
-    pass
     def __init__(self, graph_type, api_key, AA_type, AA_k, AA_level, CA_param, CA_type, CA_k, random_seed=0, load_graph_from_file=False, save_graph_flag=False, graph_path='graph.pkl'):
         random.seed(random_seed)
         np.random.seed(random_seed)
@@ -81,6 +82,7 @@ class Simulation:
             )
 
         elif graph_type == "hrg":
+            from HRG_Graph import Main_Runner as Main_Runner_HRG
             self.graph = Main_Runner_HRG(
                 save_graph_flag,
                 graph_path=graph_path,
@@ -132,7 +134,12 @@ class Simulation:
             self.graph = boost_activeness(self.graph, self.delta_a)
         volunteers = volunteers_selection(list(set(self.graph.nodes) - set(self.AA_nodes)), ratio_of_volunteers=0.2, random_seed=random_seed)
         if CA_type in ['moderator', 'contrarian']:
-            self.graph, self.CA_nodes = select_node_CA(self.graph, volunteers, CA_param, CA_type, CA_k, random_seed=random_seed)
+            # Reactive mitigation: select the moderator set M from the pool.
+            # CA_param = selection strategy, CA_type = neutral/contrarian behaviour.
+            self.graph, self.CA_nodes = select_node_CA(
+                self.graph, volunteers, CA_param, CA_type, int(CA_k),
+                random_seed=random_seed,
+            )
         else:
             self.CA_nodes = []
     def _call_api(self, prompt, temperature, max_tokens):
@@ -178,11 +185,11 @@ class Simulation:
         return self._call_api(prompt, temperature=0.7, max_tokens=120)
     
 
-    def _process_target(self, target, post, topic, friendship_flag):
+    def _process_target(self, target, post, topic):
         old_opinion = self.graph.nodes[target]['opinion']
         stubbornness = self.graph.nodes[target]['stubbornness']
         percent = int((old_opinion + 1) * 50)
-        prompt = Prompt_General.Prompt_Influence(topic=topic, percent=percent, stubbornness=round(stubbornness, 2), post=post, is_friend_flag=friendship_flag)
+        prompt = Prompt_General.Prompt_Influence(topic=topic, percent=percent, stubbornness=round(stubbornness, 2), post=post)
         response = self._call_api(prompt, temperature=0.2, max_tokens=16)
         m = re.search('\\d+', response)
         if not m:
@@ -196,17 +203,25 @@ class Simulation:
             return (target, score, new_opinion, old_opinion)
         
 
-    def compute_counter_opinion(self, active_node):
-        neighbors = list(self.graph.successors(active_node))
-        successors = neighbors
+    def compute_contrarian_opinion(self, node):
+        """Contrarian moderator opinion (paper Sec. 5.1):
+
+            o_v^t = -sign( sum_{u in Gamma_v^+} o_u^{t-1} ),  and 0 if the sum is 0.
+
+        The moderator reacts in the opposite direction to the dominant opinion
+        of its outgoing neighbourhood, using their opinions from the previous
+        step (i.e. the current stored values before this step's update).
+        """
+        successors = list(self.graph.successors(node))
         if len(successors) == 0:
             return 0
+        s = sum(self.graph.nodes[n]['opinion'] for n in successors)
+        if s > 0:
+            return -1
+        elif s < 0:
+            return 1
         else:
-            avg_opinion = sum((self.graph.nodes[n]['opinion'] for n in successors)) / len(successors)
-            if avg_opinion == 0:
-                return 0
-            else:
-                return 1 if avg_opinion < 0 else (-1)
+            return 0
             
 
     def run(self, topic, iterations=10, max_workers=2, random_seed=0):
@@ -220,9 +235,16 @@ class Simulation:
             zero_bag = [self.generate_post(0, topic) for i in range(10)]
         for iteration in tqdm(range(iterations), desc=f'Simulating {topic}'):
             active_node = np.random.choice(nodes, p=probs)
-            if self.CA_type == 'moderator' and active_node in self.CA_nodes:
-                counter_opinion_value = self.compute_counter_opinion(active_node)
-                post = self.generate_post(counter_opinion_value, topic)
+            if active_node in self.CA_nodes and self.CA_type == 'moderator':
+                # Neutral moderator: always generates neutral (opinion 0) content.
+                self.graph.nodes[active_node]['opinion'] = 0
+                post = self.generate_post(0, topic)
+            elif active_node in self.CA_nodes and self.CA_type == 'contrarian':
+                # Contrarian moderator: opinion = opposite of dominant local opinion,
+                # recomputed each step from neighbours' current (previous-step) opinions.
+                contrarian_value = self.compute_contrarian_opinion(active_node)
+                self.graph.nodes[active_node]['opinion'] = contrarian_value
+                post = self.generate_post(contrarian_value, topic)
             else:
                 post = self.generate_post(self.graph.nodes[active_node]['opinion'], topic)
             if not post:
@@ -244,12 +266,12 @@ class Simulation:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                     if self.CA_type == 'Active_cross_checking_from_feeds' and len(post_bag) > 1 and (random.random() > 0.5):
                         post_from_bag = random.choice(post_bag[:(-1)])
-                        futures = [executor.submit(self._process_target, target=t, post=f'post from your friend {post}  and also see this random post {post_from_bag}', topic=topic, friendship_flag=self.graph.has_edge(active_node, t)) for t in successors]
+                        futures = [executor.submit(self._process_target, target=t, post=f'post from your friend {post}  and also see this random post {post_from_bag}', topic=topic) for t in successors]
                     elif self.CA_type == 'Active_cross_checking_from_zero' and len(zero_bag) > 0 and (random.random() > 0.5):
                         post_from_zero_bag = random.choice(zero_bag)
-                        futures = [executor.submit(self._process_target, target=t, post=f'post from your friend {post}  and also see this random post {post_from_zero_bag}', topic=topic, friendship_flag=self.graph.has_edge(active_node, t)) for t in successors]
+                        futures = [executor.submit(self._process_target, target=t, post=f'post from your friend {post}  and also see this random post {post_from_zero_bag}', topic=topic) for t in successors]
                     else:
-                        futures = [executor.submit(self._process_target, target=t, post=post, topic=topic, friendship_flag=self.graph.has_edge(active_node, t)) for t in successors]
+                        futures = [executor.submit(self._process_target, target=t, post=post, topic=topic) for t in successors]
                     for f in concurrent.futures.as_completed(futures):
                         try:
                             results.append(f.result())

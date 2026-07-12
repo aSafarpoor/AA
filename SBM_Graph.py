@@ -4,7 +4,6 @@ import numpy as np
 
 from LLM_Utils import (
     save_graph,
-    minimal_graph_shower,
     normalize_opinions,
     compute_graph_statistics,
     assign_community_opinions,
@@ -76,7 +75,6 @@ def force_connected(G, seed=42):
 
 def Main_Runner(
     save_graph_flag=False,
-    draw_flag=False,
     graph_path="",
     random_seed=42,
 ):
@@ -91,9 +89,6 @@ def Main_Runner(
 
     normalize_opinions(G)
     compute_graph_statistics(G)
-
-    if draw_flag:
-        minimal_graph_shower(G)
 
     if save_graph_flag:
         save_graph(G, graph_path)

@@ -177,9 +177,28 @@ def select_node_CA(
     graph,
     volunteers,
     CA_param,
+    CA_type,
     CA_k,
     random_seed=42,
 ):
+    """Select the moderator set M from the moderator pool (volunteers).
+
+    Parameters
+    ----------
+    CA_param : moderator *selection strategy*
+        one of {"random", "degree", "betweenness", "greedy"} (paper Sec. 5.1).
+    CA_type : moderator *behaviour*
+        "moderator"  -> Neutral moderator  (fixed opinion 0 for all t)
+        "contrarian" -> Contrarian moderator (opposite of dominant local
+                        opinion; the time-varying value is computed in run()).
+    CA_k : moderator budget k_M (integer count of nodes to select).
+
+    For all selected moderators, activeness is set to 1 (paper Sec. 5.1).
+    Neutral moderators are additionally initialised with opinion 0; contrarian
+    moderators have their opinion recomputed every step in the simulation loop,
+    so we only fix their activeness here.
+    """
+    CA_k = int(CA_k)
     if CA_k > len(volunteers) or CA_k < 0:
         raise ValueError(
             f"{CA_k} > {len(volunteers)} or Negative !!!"
@@ -211,7 +230,12 @@ def select_node_CA(
         )
 
     for node in CAs:
-        graph.nodes[node]["opinion"] = 0
+        # All moderators are maximally active (paper Sec. 5.1).
         graph.nodes[node]["activeness"] = 1
+        if CA_type == "moderator":
+            # Neutral moderator: fixed neutral opinion for all t.
+            graph.nodes[node]["opinion"] = 0
+        # Contrarian moderators keep their opinion until run() overwrites it
+        # each step with -sign(sum of neighbours' opinions).
 
     return graph, CAs[:]

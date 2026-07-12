@@ -1,7 +1,6 @@
 import random
 import networkx as nx
 import numpy as np
-import matplotlib.pyplot as plt
 
 from LLM_Utils import save_graph
 
@@ -12,7 +11,6 @@ def generate_ssbm(
     activeness_alpha=0.6,
     activeness_beta=3.0,
     seed=42,
-    verbose=False,
 ):
     if seed is not None:
         np.random.seed(seed)
@@ -54,36 +52,6 @@ def generate_ssbm(
         val = np.clip(val, -1.0, 1.0)
         opinions[node] = float(val)
 
-    if verbose:
-        node_colors = [G.nodes[n]["block"] for n in G.nodes()]
-        pos = nx.spring_layout(G, seed=seed)
-
-        labels = {
-            n: f"{opinions[n]:.2f}"
-            for n in G.nodes()
-        }
-
-        plt.figure(figsize=(6, 6), dpi=100)
-
-        nx.draw(
-            G.to_undirected(),
-            pos,
-            node_color=node_colors,
-            cmap=plt.cm.Set2,
-            node_size=200,
-            edge_color="gray",
-            width=0.5,
-            with_labels=False,
-        )
-
-        nx.draw_networkx_labels(
-            G, pos, labels=labels, font_size=6
-        )
-
-        plt.title("SBM with opinions")
-        plt.tight_layout()
-        plt.show()
-
     nodes = list(G.nodes())
 
     for node in nodes:
@@ -115,7 +83,6 @@ def force_connected(G, seed=42):
 
 def Main_Runner(
     save_graph_flag=False,
-    draw_flag=False,
     graph_path="",
     random_seed=42,
 ):
